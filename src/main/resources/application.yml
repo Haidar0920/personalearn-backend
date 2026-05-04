@@ -1,21 +1,37 @@
 spring:
   application:
     name: personalearn
-    jwt:
-      keycloak:
-        url: ${ISSUER_URI:https://keycloak.ui-tap.com/realms/persona-learn}
-        client-id: ${CLIENT_ID:persona-learn}
-        client-secret: ${CLIENT_SECRET:7rGBPBWliQCG9DFHwchHNY0Lw74tBJMz}
+
+  datasource:
+    url: ${DATABASE_URL}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 5
+      connection-timeout: 30000
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+    open-in-view: false
+
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 100MB
+      max-request-size: 100MB
 
   security:
     oauth2:
       resourceserver:
         jwt:
-          issuer-uri: ${ISSUER_URI:https://keycloak.ui-tap.com/realms/persona-learn}
-          jwk-set-uri: ${spring.security.oauth2.resourceserver.jwt.issuer-uri}/protocol/openid-connect/certs
-  web:
-    error:
-      include-message: always
+          # Supabase JWT is HS256 — decoder is configured in SupabaseJwtConfig.java
+          # issuer-uri is NOT used for HS256, but kept for reference
+          issuer-uri: ${SUPABASE_URL}/auth/v1
 
 server:
   servlet:
@@ -23,11 +39,22 @@ server:
   port: ${PORT:8080}
   address: 0.0.0.0
 
+supabase:
+  url: ${SUPABASE_URL}
+  anon-key: ${SUPABASE_ANON_KEY}
+  service-role-key: ${SUPABASE_SERVICE_ROLE_KEY}
+  jwt:
+    secret: ${SUPABASE_JWT_SECRET}
+
+openai:
+  api-key: ${OPENAI_API_KEY}
+  model: gpt-4o-mini
+  base-url: https://api.openai.com/v1
+
 jwt:
   auth:
     converter:
-      resource-id: ${spring.application.jwt.keycloak.client-id}
-      principle-attribute: preferred_username
+      principle-attribute: sub
 
 springdoc:
   api-docs:
@@ -37,19 +64,9 @@ springdoc:
 
 management:
   endpoint:
-    metrics:
-      access: read_only
-    prometheus:
-      access: read_only
     health:
       show-details: always
-    beans:
-      access: read_only
   endpoints:
     web:
       exposure:
-        include: "*"
-  prometheus:
-    metrics:
-      export:
-        enabled: true
+        include: health,info,metrics

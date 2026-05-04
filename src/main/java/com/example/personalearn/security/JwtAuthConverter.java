@@ -6,62 +6,60 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
-import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Value;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
+/**
+ * Converts Supabase JWT to Spring Security authentication token.
+ *
+ * Supabase JWT structure:
+ * - sub: user UUID
+ * - email: user email
+ * - app_metadata.role: "client_admin" | "client_user"
+ * - user_metadata: custom user fields
+ */
 @Component
 public class JwtAuthConverter implements Converter<Jwt, AbstractAuthenticationToken> {
 
-    private final JwtGrantedAuthoritiesConverter jwtGrantedAuthoritiesConverter =
-            new JwtGrantedAuthoritiesConverter();
-
-    @Value("${jwt.auth.converter.principle-attribute:sub}")
-    private String principleAttribute;
-
-    @Value("${jwt.auth.converter.resource-id:my-client}")
-    private String resourceId;
-
     @Override
     public AbstractAuthenticationToken convert(Jwt jwt) {
-        var authorities = Stream.concat(
-                jwtGrantedAuthoritiesConverter.convert(jwt).stream(),
-                extractResourceRoles(jwt).stream()
-        ).collect(Collectors.toSet());
-
-        return new JwtAuthenticationToken(jwt, authorities, getClaimName(jwt));
+        Collection<GrantedAuthority> authorities = extractAuthorities(jwt);
+        String principal = jwt.getSubject(); // Supabase user UUID
+        return new JwtAuthenticationToken(jwt, authorities, principal);
     }
 
-    private String getClaimName(Jwt jwt) {
-        String claimName = (principleAttribute != null && !principleAttribute.isEmpty())
-                ? principleAttribute : "sub";
+    private Collection<GrantedAuthority> extractAuthorities(Jwt jwt) {
+        // Supabase stores custom roles in app_metadata.role
+        Map<String, Object> appMetadata = jwt.getClaim("app_metadata");
+        if (appMetadata == null) {
+            return defaultAuthorities();
+        }
 
-        return jwt.getClaim(claimName).toString();
+        Object roleObj = appMetadata.get("role");
+        if (roleObj == null) {
+            return defaultAuthorities();
+        }
+
+        // role can be a String or a List<String>
+        if (roleObj instanceof String role) {
+            return Set.of(new SimpleGrantedAuthority("ROLE_" + role));
+        }
+
+        if (roleObj instanceof List<?> roles) {
+            return roles.stream()
+                    .map(r -> new SimpleGrantedAuthority("ROLE_" + r))
+                    .collect(Collectors.toSet());
+        }
+
+        return defaultAuthorities();
     }
 
-    private Collection<? extends GrantedAuthority> extractResourceRoles(Jwt jwt) {
-        if (jwt.getClaim("resource_access") == null) {
-            return Set.of();
-        }
-
-        Map<String, Object> resourceAccess = jwt.getClaim("resource_access");
-        if (resourceAccess.get(resourceId) == null) {
-            return Set.of();
-        }
-
-        Map<String, Object> resource = (Map<String, Object>) resourceAccess.get(resourceId);
-        Collection<String> resourceRoles = (Collection<String>) resource.get("roles");
-
-        if (resourceRoles == null) return Set.of();
-
-        return resourceRoles.stream()
-                .map(role -> new SimpleGrantedAuthority("ROLE_" + role))
-                .collect(Collectors.toSet());
+    private Collection<GrantedAuthority> defaultAuthorities() {
+        return Set.of(new SimpleGrantedAuthority("ROLE_client_user"));
     }
 }
