@@ -32,27 +32,17 @@ public class AIService {
     private final OCEANProfileService oceanProfileService;
     private final ObjectMapper objectMapper;
 
-    @Value("${openai.api-key}")
-    private String openaiApiKey;
+    @Value("${anthropic.api-key}")
+    private String anthropicApiKey;
 
-    @Value("${openai.model:gpt-4o-mini}")
-    private String openaiModel;
+    @Value("${anthropic.model:claude-3-5-haiku-20241022}")
+    private String anthropicModel;
 
-    @Value("${openai.base-url:https://api.openai.com/v1}")
-    private String openaiBaseUrl;
+    private static final String ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages";
+    private static final String ANTHROPIC_VERSION = "2023-06-01";
 
     private final OkHttpClient httpClient = new OkHttpClient();
 
-    /**
-     * Send a message and get AI response.
-     * Adapts tone/format based on employee's OCEAN profile.
-     *
-     * @param employeeId employee UUID
-     * @param materialId optional material context (null for general chat)
-     * @param userMessage user's message text
-     * @param userId Supabase user UUID from JWT
-     * @param chatType "employee_chat" | "admin_chat"
-     */
     @Transactional
     public String chat(UUID employeeId, UUID materialId, String userMessage,
                        UUID userId, String chatType) throws Exception {
@@ -64,7 +54,6 @@ public class AIService {
                 ? materialRepository.findById(materialId).orElse(null)
                 : null;
 
-        // Get OCEAN profile and LLM rules
         OCEANProfile oceanProfile = oceanProfileService.getOrCreate(employee);
         String llmRules = oceanProfile.getLlmRules();
 
@@ -73,18 +62,13 @@ public class AIService {
                 ? aiMessageRepository.findByEmployeeIdAndMaterialIdOrderByCreatedAtAsc(employeeId, materialId)
                 : aiMessageRepository.findByUserIdAndChatTypeOrderByCreatedAtAsc(userId, chatType);
 
-        // Build messages for OpenAI
+        // Build messages for Anthropic (no system role in messages array)
         List<Map<String, String>> messages = new ArrayList<>();
-        messages.add(Map.of("role", "system", "content", buildSystemPrompt(employee, material, llmRules, oceanProfile.getLearningProfile())));
-
-        // Add history (last 20 turns to stay within context)
         int startIdx = Math.max(0, history.size() - 20);
         for (int i = startIdx; i < history.size(); i++) {
             AIMessage msg = history.get(i);
             messages.add(Map.of("role", msg.getRole(), "content", msg.getContent()));
         }
-
-        // Add current user message
         messages.add(Map.of("role", "user", "content", userMessage));
 
         // Save user message
@@ -98,8 +82,9 @@ public class AIService {
                 .build();
         aiMessageRepository.save(userMsg);
 
-        // Call OpenAI
-        String assistantReply = callOpenAI(messages);
+        // Call Claude
+        String systemPrompt = buildSystemPrompt(employee, material, llmRules, oceanProfile.getLearningProfile());
+        String assistantReply = callClaude(systemPrompt, messages);
 
         // Save assistant message
         AIMessage assistantMsg = AIMessage.builder()
@@ -112,7 +97,7 @@ public class AIService {
                 .build();
         aiMessageRepository.save(assistantMsg);
 
-        // Update OCEAN profile assessment turn count
+        // Re-assess OCEAN every 10 turns
         long totalTurns = aiMessageRepository.countByEmployeeId(employeeId);
         if (totalTurns % 10 == 0 && totalTurns > 0) {
             updateOceanFromConversation(employee, oceanProfile, history);
@@ -121,60 +106,56 @@ public class AIService {
         return assistantReply;
     }
 
-    /**
-     * Builds system prompt injecting OCEAN rules for adaptive content delivery.
-     */
     private String buildSystemPrompt(Employee employee, Material material,
                                      String llmRules, String learningProfile) {
         StringBuilder sb = new StringBuilder();
         sb.append("Ты — AI-наставник платформы PersonaLearn для обучения сотрудников продажам.\n\n");
         sb.append("Сотрудник: ").append(employee.getName())
-          .append(", должность: ").append(employee.getPosition()).append(".\n\n");
+          .append(", должность: ").append(employee.getPosition() != null ? employee.getPosition() : "не указана")
+          .append(".\n\n");
 
         if (material != null) {
             sb.append("Тема обучения: ").append(material.getTitle()).append(".\n");
-            if (material.getDescription() != null) {
+            if (material.getDescription() != null)
                 sb.append("Описание: ").append(material.getDescription()).append("\n");
-            }
-            if (material.getGoal() != null) {
+            if (material.getGoal() != null)
                 sb.append("Цель обучения: ").append(material.getGoal()).append("\n");
-            }
             sb.append("\n");
         }
 
-        sb.append("Профиль обучения: ").append(learningProfile).append(".\n");
+        sb.append("Профиль обучения сотрудника: ").append(learningProfile).append(".\n");
         sb.append("Правила адаптации контента (JSON): ").append(llmRules).append("\n\n");
         sb.append("""
-            Следуй правилам адаптации строго:
+            Строго следуй правилам адаптации:
             - content_order: concept-first = начинай с теории; instruction-first = сразу к действиям
-            - content_length: short = 2-3 предложения; medium = абзац; detailed = подробно
-            - feedback_tone: supportive = поддерживающий тон; direct = прямой и конкретный
-            - check_frequency: very-high = проверяй каждые 1-2 обмена; medium = каждые 4-5
-            - difficulty_progression: gradual = постепенно усложняй; fast = сразу сложные задачи
+            - content_length: short = 2-3 предложения; medium = абзац; detailed = подробно с примерами
+            - feedback_tone: supportive = тёплый поддерживающий тон; direct = прямой и конкретный
+            - check_frequency: very-high = проверяй понимание каждые 1-2 ответа; medium = каждые 4-5
+            - difficulty_progression: gradual = постепенно усложняй; fast = сразу высокий темп
 
-            Веди диалог по-русски. Оценивай ответы по шкале 1-10, давай конструктивную обратную связь.
-            Задавай уточняющие вопросы по теме материала.
+            Веди диалог на русском языке.
+            Оценивай ответы сотрудника по шкале 1-10 когда он отвечает на вопросы.
+            Давай конструктивную обратную связь согласно feedback_tone.
+            Задавай проверочные вопросы по материалу согласно check_frequency.
             """);
 
         return sb.toString();
     }
 
-    /**
-     * Calls OpenAI Chat Completions API.
-     */
-    private String callOpenAI(List<Map<String, String>> messages) throws Exception {
+    private String callClaude(String systemPrompt, List<Map<String, String>> messages) throws Exception {
         Map<String, Object> requestBody = Map.of(
-                "model", openaiModel,
-                "messages", messages,
-                "max_tokens", 1000,
-                "temperature", 0.7
+                "model", anthropicModel,
+                "max_tokens", 1024,
+                "system", systemPrompt,
+                "messages", messages
         );
 
         String requestJson = objectMapper.writeValueAsString(requestBody);
 
         Request request = new Request.Builder()
-                .url(openaiBaseUrl + "/chat/completions")
-                .addHeader("Authorization", "Bearer " + openaiApiKey)
+                .url(ANTHROPIC_API_URL)
+                .addHeader("x-api-key", anthropicApiKey)
+                .addHeader("anthropic-version", ANTHROPIC_VERSION)
                 .addHeader("Content-Type", "application/json")
                 .post(RequestBody.create(requestJson, MediaType.get("application/json")))
                 .build();
@@ -182,19 +163,15 @@ public class AIService {
         try (Response response = httpClient.newCall(request).execute()) {
             if (!response.isSuccessful()) {
                 String errBody = response.body() != null ? response.body().string() : "unknown";
-                log.error("OpenAI API error: {} - {}", response.code(), errBody);
-                throw new RuntimeException("OpenAI API error: " + response.code());
+                log.error("Anthropic API error: {} - {}", response.code(), errBody);
+                throw new RuntimeException("AI service error: " + response.code());
             }
             String responseJson = response.body().string();
             JsonNode root = objectMapper.readTree(responseJson);
-            return root.path("choices").get(0).path("message").path("content").asText();
+            return root.path("content").get(0).path("text").asText();
         }
     }
 
-    /**
-     * Periodically re-assess OCEAN levels from conversation history.
-     * Uses OpenAI to analyze conversation patterns.
-     */
     private void updateOceanFromConversation(Employee employee, OCEANProfile profile,
                                               List<AIMessage> history) {
         try {
@@ -204,8 +181,8 @@ public class AIService {
                     .reduce("", (a, b) -> a + "\n" + b);
 
             String assessmentPrompt = """
-                Analyze these learner responses and assess their OCEAN personality traits.
-                Return ONLY a valid JSON object with no other text:
+                Analyze these learner responses and assess their OCEAN personality traits for adaptive learning.
+                Return ONLY a valid JSON object, nothing else:
                 {
                   "o_level": "low|medium|high",
                   "c_level": "low|medium|high",
@@ -213,24 +190,23 @@ public class AIService {
                   "a_level": "low|medium|high",
                   "n_level": "low|medium|high"
                 }
-
                 Learner responses:
                 """ + conversationText;
 
-            List<Map<String, String>> assessMessages = List.of(
-                    Map.of("role", "user", "content", assessmentPrompt)
-            );
+            String result = callClaude("You are a psychometric assessment AI. Respond only with valid JSON.",
+                    List.of(Map.of("role", "user", "content", assessmentPrompt)));
 
-            String result = callOpenAI(assessMessages);
-            JsonNode json = objectMapper.readTree(result);
+            // Extract JSON from response (Claude may add markdown)
+            String json = result.replaceAll("```json|```", "").trim();
+            JsonNode jsonNode = objectMapper.readTree(json);
 
             oceanProfileService.updateLevels(
                     employee.getId(),
-                    json.path("o_level").asText("medium"),
-                    json.path("c_level").asText("medium"),
-                    json.path("e_level").asText("medium"),
-                    json.path("a_level").asText("medium"),
-                    json.path("n_level").asText("low"),
+                    jsonNode.path("o_level").asText("medium"),
+                    jsonNode.path("c_level").asText("medium"),
+                    jsonNode.path("e_level").asText("medium"),
+                    jsonNode.path("a_level").asText("medium"),
+                    jsonNode.path("n_level").asText("low"),
                     history.size()
             );
             log.info("OCEAN profile updated for employee {}", employee.getId());
@@ -239,9 +215,6 @@ public class AIService {
         }
     }
 
-    /**
-     * Get chat history for display.
-     */
     public List<AIMessage> getHistory(UUID employeeId, UUID materialId,
                                        UUID userId, String chatType) {
         if (materialId != null) {

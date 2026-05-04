@@ -46,10 +46,9 @@ supabase:
   jwt:
     secret: ${SUPABASE_JWT_SECRET}
 
-openai:
-  api-key: ${OPENAI_API_KEY}
-  model: gpt-4o-mini
-  base-url: https://api.openai.com/v1
+anthropic:
+  api-key: ${ANTHROPIC_API_KEY}
+  model: claude-3-5-haiku-20241022
 
 jwt:
   auth:
