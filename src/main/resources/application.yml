@@ -29,9 +29,9 @@ spring:
     oauth2:
       resourceserver:
         jwt:
-          # Supabase JWT is HS256 — decoder is configured in SupabaseJwtConfig.java
-          # issuer-uri is NOT used for HS256, but kept for reference
-          issuer-uri: ${SUPABASE_URL}/auth/v1
+          # Decoder configured in SupabaseJwtConfig.java via JWKS (RS256)
+          # No JWT secret needed — uses public keys from Supabase
+          jwk-set-uri: ${SUPABASE_URL}/auth/v1/.well-known/jwks.json
 
 server:
   servlet:
