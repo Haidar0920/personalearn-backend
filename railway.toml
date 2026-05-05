@@ -1,9 +1,7 @@
 [build]
-builder = "NIXPACKS"
-buildCommand = "./gradlew bootJar -x test"
+builder = "DOCKERFILE"
 
 [deploy]
-startCommand = "java -jar build/libs/personalearn-0.0.1-SNAPSHOT.jar"
 healthcheckPath = "/api-persona-learn/actuator/health"
 healthcheckTimeout = 120
 restartPolicyType = "ON_FAILURE"
