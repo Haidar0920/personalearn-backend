@@ -36,9 +36,12 @@ public class EmployeeService {
         return employees.stream().map(this::toResponse).toList();
     }
 
-    public EmployeeResponse getEmployee(UUID id) {
+    public EmployeeResponse getEmployee(UUID id, UUID managerId) {
         Employee e = employeeRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
+        if (!e.getCreatedBy().equals(managerId)) {
+            throw new RuntimeException("Access denied");
+        }
         return toResponse(e);
     }
 

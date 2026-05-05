@@ -36,8 +36,12 @@ public class MaterialController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Material> get(@PathVariable UUID id) {
+    public ResponseEntity<Material> get(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+        UUID createdBy = UUID.fromString(jwt.getSubject());
         return materialRepository.findById(id)
+                .filter(m -> m.getCreatedBy().equals(createdBy))
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

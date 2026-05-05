@@ -35,8 +35,11 @@ public class EmployeeController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('client_admin')")
-    public ResponseEntity<EmployeeResponse> get(@PathVariable UUID id) {
-        return ResponseEntity.ok(employeeService.getEmployee(id));
+    public ResponseEntity<EmployeeResponse> get(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+        UUID managerId = UUID.fromString(jwt.getSubject());
+        return ResponseEntity.ok(employeeService.getEmployee(id, managerId));
     }
 
     @PostMapping
