@@ -58,14 +58,14 @@ public class EmployeeService {
                 .createdBy(managerId)
                 .build();
 
-        employee = employeeRepository.save(employee);
+        final Employee savedEmployee = employeeRepository.save(employee);
 
         // Assign materials if provided
         if (req.materialIds() != null && !req.materialIds().isEmpty()) {
             for (UUID materialId : req.materialIds()) {
                 materialRepository.findById(materialId).ifPresent(material -> {
                     EmployeeMaterial em = EmployeeMaterial.builder()
-                            .employee(employee)
+                            .employee(savedEmployee)
                             .material(material)
                             .deadline(req.deadline())
                             .goal(req.goal())
@@ -75,8 +75,8 @@ public class EmployeeService {
             }
         }
 
-        log.info("Employee created: {} by manager {}", employee.getId(), managerId);
-        return toResponse(employee);
+        log.info("Employee created: {} by manager {}", savedEmployee.getId(), managerId);
+        return toResponse(savedEmployee);
     }
 
     @Transactional
