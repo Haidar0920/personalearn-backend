@@ -39,6 +39,7 @@ dependencies {
     implementation("commons-io:commons-io:2.15.1")
 
     // JSON
+    implementation("org.springframework.boot:spring-boot-starter-json")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310")
 
     // OpenAI HTTP client
