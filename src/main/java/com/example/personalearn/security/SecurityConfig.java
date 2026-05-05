@@ -66,6 +66,7 @@ public class SecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(
+                "https://personalearn-frontend.vercel.app",
                 "https://persona-learn-six.vercel.app",
                 "https://personalearn.vercel.app",
                 "http://localhost:5173",
