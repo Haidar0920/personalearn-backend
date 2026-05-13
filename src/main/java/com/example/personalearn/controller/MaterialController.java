@@ -38,12 +38,9 @@ public class MaterialController {
 
     @GetMapping("/{id}")
     @PreAuthorize("isAuthenticated()")
-    public ResponseEntity<Material> get(
-            @PathVariable UUID id,
-            @AuthenticationPrincipal Jwt jwt) {
-        UUID createdBy = UUID.fromString(jwt.getSubject());
+    public ResponseEntity<Material> get(@PathVariable UUID id) {
+        // Any authenticated user can read a material (employees need to view assigned materials)
         return materialRepository.findById(id)
-                .filter(m -> m.getCreatedBy().equals(createdBy))
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

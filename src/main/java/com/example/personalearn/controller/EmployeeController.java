@@ -72,6 +72,35 @@ public class EmployeeController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    @GetMapping("/me/materials")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<List<Map<String, Object>>> myMaterials(@AuthenticationPrincipal Jwt jwt) {
+        UUID userId = UUID.fromString(jwt.getSubject());
+        Employee employee = employeeRepository.findByUserId(userId).orElse(null);
+        if (employee == null) {
+            return ResponseEntity.ok(List.of());
+        }
+        List<EmployeeMaterial> assignments = employeeMaterialRepository.findByEmployeeId(employee.getId());
+        List<Map<String, Object>> result = assignments.stream().map(em -> {
+            Map<String, Object> entry = new java.util.LinkedHashMap<>();
+            entry.put("id", em.getId());
+            entry.put("employeeId", employee.getId());
+            entry.put("materialId", em.getMaterial().getId());
+            entry.put("title", em.getMaterial().getTitle());
+            entry.put("description", em.getMaterial().getDescription());
+            entry.put("type", em.getMaterial().getType());
+            entry.put("fileUrl", em.getMaterial().getFileUrl());
+            entry.put("status", em.getStatus());
+            entry.put("progressPercent", em.getProgressPercent());
+            entry.put("aiScore", em.getAiScore());
+            entry.put("deadline", em.getDeadline());
+            entry.put("startedAt", em.getStartedAt());
+            entry.put("completedAt", em.getCompletedAt());
+            return entry;
+        }).collect(java.util.stream.Collectors.toList());
+        return ResponseEntity.ok(result);
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('client_admin')")
     public ResponseEntity<EmployeeResponse> get(
