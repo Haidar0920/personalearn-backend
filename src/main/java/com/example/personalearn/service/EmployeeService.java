@@ -10,6 +10,7 @@ import com.example.personalearn.entity.Material;
 import com.example.personalearn.repository.EmployeeMaterialRepository;
 import com.example.personalearn.repository.EmployeeRepository;
 import com.example.personalearn.repository.MaterialRepository;
+import com.example.personalearn.repository.OCEANProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -27,6 +28,7 @@ public class EmployeeService {
     private final EmployeeRepository employeeRepository;
     private final MaterialRepository materialRepository;
     private final EmployeeMaterialRepository employeeMaterialRepository;
+    private final OCEANProfileRepository oceanProfileRepository;
 
     public List<EmployeeResponse> getEmployees(UUID managerId, String search) {
         List<Employee> employees = (search != null && !search.isBlank())
@@ -123,10 +125,16 @@ public class EmployeeService {
         employeeRepository.deleteById(id);
     }
 
-    private EmployeeResponse toResponse(Employee e) {
+    @Transactional(readOnly = true)
+    public EmployeeResponse toResponse(Employee e) {
         Double progress = employeeMaterialRepository.avgProgressByEmployee(e.getId());
+        String learningProfile = oceanProfileRepository
+                .findByEmployeeId(e.getId())
+                .map(p -> p.getLearningProfile())
+                .orElse(null);
         return EmployeeResponse.builder()
                 .id(e.getId())
+                .userId(e.getUserId())
                 .name(e.getName())
                 .email(e.getEmail())
                 .position(e.getPosition())
@@ -134,6 +142,8 @@ public class EmployeeService {
                 .avatarInitials(e.getAvatarInitials())
                 .avatarColor(e.getAvatarColor())
                 .trainingProgress(progress != null ? progress.intValue() : 0)
+                .onboardingCompleted(e.getOnboardingCompleted())
+                .oceanLearningProfile(learningProfile)
                 .createdAt(e.getCreatedAt())
                 .build();
     }

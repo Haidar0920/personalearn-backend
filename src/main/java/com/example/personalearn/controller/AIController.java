@@ -54,6 +54,29 @@ public class AIController {
         }
     }
 
+    @PostMapping("/onboarding")
+    @PreAuthorize("isAuthenticated()")
+    public ResponseEntity<Map<String, Object>> onboarding(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody Map<String, String> body) {
+        if (jwt == null) return ResponseEntity.status(401).build();
+        try {
+            UUID userId = UUID.fromString(jwt.getSubject());
+            Employee employee = employeeRepository.findByUserId(userId)
+                    .orElse(null);
+            if (employee == null) {
+                return ResponseEntity.notFound().build();
+            }
+            String message = body.get("message");
+            Map<String, Object> result = aiService.onboardingChat(employee, message);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            log.error("Onboarding chat error: {}", e.getMessage());
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "AI service unavailable. Please try again."));
+        }
+    }
+
     @GetMapping("/history")
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<ChatMessageResponse>> history(

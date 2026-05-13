@@ -25,6 +25,7 @@ public class MaterialController {
     private final MaterialRepository materialRepository;
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<List<Material>> list(
             @AuthenticationPrincipal Jwt jwt,
             @RequestParam(required = false) String type) {
@@ -36,6 +37,7 @@ public class MaterialController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Material> get(
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt) {
@@ -97,8 +99,16 @@ public class MaterialController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('client_admin')")
-    public ResponseEntity<Void> delete(@PathVariable UUID id) {
-        materialRepository.deleteById(id);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<Void> delete(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal Jwt jwt) {
+        UUID createdBy = UUID.fromString(jwt.getSubject());
+        return materialRepository.findById(id)
+                .filter(m -> m.getCreatedBy().equals(createdBy))
+                .map(m -> {
+                    materialRepository.deleteById(id);
+                    return ResponseEntity.<Void>noContent().build();
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 }

@@ -215,6 +215,77 @@ public class AIService {
         }
     }
 
+    @Transactional
+    public Map<String, Object> onboardingChat(Employee employee, String userMessage) throws Exception {
+        String chatType = "onboarding";
+        UUID userId = employee.getUserId();
+
+        // Load history for this onboarding chat
+        List<AIMessage> history = aiMessageRepository.findByUserIdAndChatTypeOrderByCreatedAtAsc(userId, chatType);
+
+        // Build messages for Claude
+        List<Map<String, String>> messages = new ArrayList<>();
+        int startIdx = Math.max(0, history.size() - 20);
+        for (int i = startIdx; i < history.size(); i++) {
+            AIMessage msg = history.get(i);
+            messages.add(Map.of("role", msg.getRole(), "content", msg.getContent()));
+        }
+        messages.add(Map.of("role", "user", "content", userMessage));
+
+        // Save user message
+        AIMessage userMsg = AIMessage.builder()
+                .employee(employee)
+                .role("user")
+                .content(userMessage)
+                .chatType(chatType)
+                .userId(userId)
+                .build();
+        aiMessageRepository.save(userMsg);
+
+        // Count user turns
+        long userTurns = history.stream().filter(m -> "user".equals(m.getRole())).count() + 1;
+
+        boolean completed = false;
+
+        // After 7 user turns, force OCEAN update and mark onboarding complete
+        if (userTurns >= 7) {
+            OCEANProfile oceanProfile = oceanProfileService.getOrCreate(employee);
+            updateOceanFromConversation(employee, oceanProfile, history);
+            employee.setOnboardingCompleted(true);
+            employeeRepository.save(employee);
+            completed = true;
+        }
+
+        String systemPrompt = """
+                Ты — AI-ассистент платформы обучения PersonaLearn. Познакомься с сотрудником и пойми его стиль обучения через разговор.
+                Задай ровно 7 вопросов по одному. Вопросы должны помочь понять: предпочитает теорию или практику сначала, комфорт с неопределённостью, нужна ли структура и планы, реакция на ошибки, самостоятельность vs командная работа, важность поддержки и обратной связи, предпочитаемый темп.
+                Будь дружелюбным, задавай по одному вопросу за раз. Не упоминай OCEAN. Общайся на русском языке.
+                После 7-го ответа сотрудника скажи что онбординг завершён и персональный план обучения готов.
+                """;
+
+        String assistantReply = callClaude(systemPrompt, messages);
+
+        // Save assistant message
+        AIMessage assistantMsg = AIMessage.builder()
+                .employee(employee)
+                .role("assistant")
+                .content(assistantReply)
+                .chatType(chatType)
+                .userId(userId)
+                .build();
+        aiMessageRepository.save(assistantMsg);
+
+        // Get learning profile from OCEAN
+        OCEANProfile oceanProfile = oceanProfileService.getOrCreate(employee);
+        String learningProfile = oceanProfile.getLearningProfile();
+
+        return Map.of(
+                "reply", assistantReply,
+                "completed", completed,
+                "learningProfile", learningProfile != null ? learningProfile : "STRUCTURED_GUIDE"
+        );
+    }
+
     public List<AIMessage> getHistory(UUID employeeId, UUID materialId,
                                        UUID userId, String chatType) {
         if (materialId != null) {

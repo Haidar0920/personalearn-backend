@@ -54,10 +54,14 @@ public class Employee {
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
 
+    @Column(name = "onboarding_completed")
+    @Builder.Default
+    private Boolean onboardingCompleted = false;
+
     @OneToMany(mappedBy = "employee", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     @Builder.Default
     private List<EmployeeMaterial> assignments = new ArrayList<>();
 
     @OneToOne(mappedBy = "employee", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private DISCProfile discProfile;
+    private OCEANProfile oceanProfile;
 }

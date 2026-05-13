@@ -16,6 +16,8 @@ public interface EmployeeRepository extends JpaRepository<Employee, UUID> {
 
     Optional<Employee> findByEmail(String email);
 
+    Optional<Employee> findByUserId(UUID userId);
+
     boolean existsByEmail(String email);
 
     @Query("SELECT COUNT(e) FROM Employee e WHERE e.createdBy = :managerId")

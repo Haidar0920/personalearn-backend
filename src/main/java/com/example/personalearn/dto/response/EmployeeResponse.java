@@ -8,6 +8,7 @@ import java.util.UUID;
 @Builder
 public record EmployeeResponse(
         UUID id,
+        UUID userId,
         String name,
         String email,
         String position,
@@ -15,5 +16,7 @@ public record EmployeeResponse(
         String avatarInitials,
         String avatarColor,
         int trainingProgress,
+        Boolean onboardingCompleted,
+        String oceanLearningProfile,
         LocalDateTime createdAt
 ) {}
