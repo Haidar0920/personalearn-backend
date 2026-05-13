@@ -20,7 +20,7 @@ import lombok.extern.slf4j.Slf4j;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.RequestBody;
+import org.springframework.web.bind.annotation.RequestBody;
 import okhttp3.Response;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -116,7 +116,7 @@ public class EmployeeController {
                     .addHeader("apikey", supabaseServiceRoleKey)
                     .addHeader("Authorization", "Bearer " + supabaseServiceRoleKey)
                     .addHeader("Content-Type", "application/json")
-                    .patch(RequestBody.create(roleBody, MediaType.get("application/json")))
+                    .patch(okhttp3.RequestBody.create(roleBody, MediaType.get("application/json")))
                     .build();
             try (Response roleResponse = httpClient.newCall(roleRequest).execute()) {
                 if (!roleResponse.isSuccessful()) {
@@ -152,7 +152,7 @@ public class EmployeeController {
                     .addHeader("apikey", supabaseServiceRoleKey)
                     .addHeader("Authorization", "Bearer " + supabaseServiceRoleKey)
                     .addHeader("Content-Type", "application/json")
-                    .post(RequestBody.create(body, MediaType.get("application/json")))
+                    .post(okhttp3.RequestBody.create(body, MediaType.get("application/json")))
                     .build();
             String inviteResponseBody;
             try (Response response = httpClient.newCall(request).execute()) {
@@ -175,7 +175,7 @@ public class EmployeeController {
                             .addHeader("apikey", supabaseServiceRoleKey)
                             .addHeader("Authorization", "Bearer " + supabaseServiceRoleKey)
                             .addHeader("Content-Type", "application/json")
-                            .patch(RequestBody.create(roleBody, MediaType.get("application/json")))
+                            .patch(okhttp3.RequestBody.create(roleBody, MediaType.get("application/json")))
                             .build();
                     try (Response roleResponse = httpClient.newCall(roleRequest).execute()) {
                         if (!roleResponse.isSuccessful()) {

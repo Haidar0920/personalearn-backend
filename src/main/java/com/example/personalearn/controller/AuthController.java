@@ -15,7 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
-import okhttp3.RequestBody;
+import org.springframework.web.bind.annotation.RequestBody;
 import okhttp3.Response;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
@@ -66,7 +66,7 @@ public class AuthController {
                     .addHeader("apikey", supabaseServiceRoleKey)
                     .addHeader("Authorization", "Bearer " + supabaseServiceRoleKey)
                     .addHeader("Content-Type", "application/json")
-                    .post(RequestBody.create(bodyJson, MediaType.get("application/json")))
+                    .post(okhttp3.RequestBody.create(bodyJson, MediaType.get("application/json")))
                     .build();
 
             String responseBody;
