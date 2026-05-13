@@ -10,10 +10,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
-
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -40,9 +37,9 @@ public class MaterialController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Material> get(@PathVariable UUID id) {
         // Any authenticated user can read a material (employees need to view assigned materials)
-        return materialRepository.findById(id)
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        Material material = materialRepository.findById(id).orElse(null);
+        if (material == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(material);
     }
 
     /**
@@ -88,12 +85,10 @@ public class MaterialController {
     @PatchMapping("/{id}/publish")
     @PreAuthorize("hasRole('client_admin')")
     public ResponseEntity<Material> publish(@PathVariable UUID id) {
-        return materialRepository.findById(id)
-                .map(m -> {
-                    m.setIsPublished(true);
-                    return ResponseEntity.ok(materialRepository.save(m));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        Material material = materialRepository.findById(id).orElse(null);
+        if (material == null) return ResponseEntity.notFound().build();
+        material.setIsPublished(true);
+        return ResponseEntity.ok(materialRepository.save(material));
     }
 
     @DeleteMapping("/{id}")
@@ -102,12 +97,11 @@ public class MaterialController {
             @PathVariable UUID id,
             @AuthenticationPrincipal Jwt jwt) {
         UUID createdBy = UUID.fromString(jwt.getSubject());
-        return materialRepository.findById(id)
+        Material material = materialRepository.findById(id)
                 .filter(m -> m.getCreatedBy().equals(createdBy))
-                .map(m -> {
-                    materialRepository.deleteById(id);
-                    return ResponseEntity.<Void>noContent().build();
-                })
-                .orElse(ResponseEntity.notFound().build());
+                .orElse(null);
+        if (material == null) return ResponseEntity.notFound().build();
+        materialRepository.deleteById(id);
+        return ResponseEntity.noContent().build();
     }
 }

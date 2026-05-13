@@ -67,9 +67,9 @@ public class EmployeeController {
     @PreAuthorize("isAuthenticated()")
     public ResponseEntity<EmployeeResponse> me(@AuthenticationPrincipal Jwt jwt) {
         UUID userId = UUID.fromString(jwt.getSubject());
-        return employeeRepository.findByUserId(userId)
-                .map(emp -> ResponseEntity.ok(employeeService.toResponse(emp)))
-                .orElse(ResponseEntity.notFound().build());
+        Employee emp = employeeRepository.findByUserId(userId).orElse(null);
+        if (emp == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(employeeService.toResponse(emp));
     }
 
     @GetMapping("/me/materials")
