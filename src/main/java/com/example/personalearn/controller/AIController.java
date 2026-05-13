@@ -37,10 +37,12 @@ public class AIController {
         try {
             UUID userId = UUID.fromString(jwt.getSubject());
 
-            // Verify caller owns this employee
+            // Caller can be: manager (createdBy) or the employee themselves (userId)
             Employee emp = employeeRepository.findById(req.employeeId())
                     .orElseThrow(() -> new RuntimeException("Employee not found"));
-            if (!emp.getCreatedBy().equals(userId)) {
+            boolean isOwner = emp.getCreatedBy().equals(userId);
+            boolean isSelf = userId.equals(emp.getUserId());
+            if (!isOwner && !isSelf) {
                 return ResponseEntity.status(403).build();
             }
 
@@ -88,10 +90,12 @@ public class AIController {
 
         UUID userId = UUID.fromString(jwt.getSubject());
 
-        // Verify caller owns this employee
+        // Caller can be: manager (createdBy) or the employee themselves (userId)
         Employee emp = employeeRepository.findById(employeeId)
                 .orElseThrow(() -> new RuntimeException("Employee not found"));
-        if (!emp.getCreatedBy().equals(userId)) {
+        boolean isOwner = emp.getCreatedBy().equals(userId);
+        boolean isSelf = userId.equals(emp.getUserId());
+        if (!isOwner && !isSelf) {
             return ResponseEntity.status(403).build();
         }
 
