@@ -65,6 +65,7 @@ public class MaterialController {
             @RequestParam String fileUrl,
             @RequestParam(required = false) String fileName,
             @RequestParam(required = false) Long fileSize,
+            @RequestParam(required = false) String content,
             @RequestParam(defaultValue = "false") boolean publish) {
 
         UUID createdBy = UUID.fromString(jwt.getSubject());
@@ -77,6 +78,7 @@ public class MaterialController {
                 .fileUrl(fileUrl)
                 .fileName(fileName)
                 .fileSize(fileSize)
+                .content(content)
                 .isPublished(publish)
                 .createdBy(createdBy)
                 .build();

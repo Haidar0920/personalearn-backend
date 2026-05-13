@@ -40,6 +40,10 @@ public class Material {
     @Column(name = "file_size")
     private Long fileSize;
 
+    /** Full text content of the material — used by AI for teaching */
+    @Column(columnDefinition = "TEXT")
+    private String content;
+
     /** Цель обучения */
     private String goal;
 

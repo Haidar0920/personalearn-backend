@@ -12,6 +12,7 @@ import com.example.personalearn.entity.EmployeeMaterial;
 import com.example.personalearn.repository.EmployeeMaterialRepository;
 import com.example.personalearn.repository.EmployeeRepository;
 import com.example.personalearn.service.EmployeeService;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -105,6 +106,28 @@ public class EmployeeController {
         }
         employee.setUserId(userId);
         employee = employeeRepository.save(employee);
+
+        // Set client_user role in Supabase app_metadata
+        try {
+            String roleBody = objectMapper.writeValueAsString(
+                    Map.of("app_metadata", Map.of("role", "client_user")));
+            Request roleRequest = new Request.Builder()
+                    .url(supabaseUrl + "/auth/v1/admin/users/" + userId)
+                    .addHeader("apikey", supabaseServiceRoleKey)
+                    .addHeader("Authorization", "Bearer " + supabaseServiceRoleKey)
+                    .addHeader("Content-Type", "application/json")
+                    .patch(RequestBody.create(roleBody, MediaType.get("application/json")))
+                    .build();
+            try (Response roleResponse = httpClient.newCall(roleRequest).execute()) {
+                if (!roleResponse.isSuccessful()) {
+                    String errBody = roleResponse.body() != null ? roleResponse.body().string() : "unknown";
+                    log.warn("Failed to set client_user role in Supabase for {}: {} - {}", userId, roleResponse.code(), errBody);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Error setting client_user role in Supabase for {}: {}", userId, e.getMessage());
+        }
+
         return ResponseEntity.ok(employeeService.toResponse(employee));
     }
 
@@ -131,13 +154,42 @@ public class EmployeeController {
                     .addHeader("Content-Type", "application/json")
                     .post(RequestBody.create(body, MediaType.get("application/json")))
                     .build();
+            String inviteResponseBody;
             try (Response response = httpClient.newCall(request).execute()) {
+                inviteResponseBody = response.body() != null ? response.body().string() : "";
                 if (!response.isSuccessful()) {
-                    String errBody = response.body() != null ? response.body().string() : "unknown";
-                    log.error("Supabase invite error: {} - {}", response.code(), errBody);
+                    log.error("Supabase invite error: {} - {}", response.code(), inviteResponseBody);
                     return ResponseEntity.status(502).body(Map.of("error", "Failed to send invite: " + response.code()));
                 }
             }
+
+            // Parse the new user's id from invite response and set client_user role
+            try {
+                JsonNode inviteJson = objectMapper.readTree(inviteResponseBody);
+                String newUserId = inviteJson.path("id").asText(null);
+                if (newUserId != null && !newUserId.isBlank()) {
+                    String roleBody = objectMapper.writeValueAsString(
+                            Map.of("app_metadata", Map.of("role", "client_user")));
+                    Request roleRequest = new Request.Builder()
+                            .url(supabaseUrl + "/auth/v1/admin/users/" + newUserId)
+                            .addHeader("apikey", supabaseServiceRoleKey)
+                            .addHeader("Authorization", "Bearer " + supabaseServiceRoleKey)
+                            .addHeader("Content-Type", "application/json")
+                            .patch(RequestBody.create(roleBody, MediaType.get("application/json")))
+                            .build();
+                    try (Response roleResponse = httpClient.newCall(roleRequest).execute()) {
+                        if (!roleResponse.isSuccessful()) {
+                            String errBody = roleResponse.body() != null ? roleResponse.body().string() : "unknown";
+                            log.warn("Failed to set client_user role for invited user {}: {} - {}", newUserId, roleResponse.code(), errBody);
+                        }
+                    }
+                } else {
+                    log.warn("Invite response did not contain user id, skipping role assignment");
+                }
+            } catch (Exception e) {
+                log.warn("Error setting client_user role after invite: {}", e.getMessage());
+            }
+
             return ResponseEntity.ok(Map.of("message", "Invite sent to " + employee.getEmail()));
         } catch (Exception e) {
             log.error("Invite error: {}", e.getMessage());

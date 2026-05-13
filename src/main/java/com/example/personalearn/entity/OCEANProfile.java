@@ -91,6 +91,10 @@ public class OCEANProfile {
     @Builder.Default
     private Integer assessmentTurns = 0;
 
+    /** JSON: { "confidence": {...}, "askedIds": [...], "questionCount": N } */
+    @Column(name = "assessment_state", columnDefinition = "TEXT")
+    private String assessmentState;
+
     @UpdateTimestamp
     @Column(name = "last_updated")
     private LocalDateTime lastUpdated;
